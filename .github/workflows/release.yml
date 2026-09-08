@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: >-
+          xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug
+          -destination "platform=macOS,arch=$(uname -m)" -derivedDataPath .build test
+      - name: Build universal app
+        run: >-
+          xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Release
+          -destination 'generic/platform=macOS' -derivedDataPath .build build
+      - name: Package and verify DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          app='.build/Build/Products/Release/Milo.app'
+          actual_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          test "$version" = "$actual_version"
+          test -f "docs/releases/$version.md"
+          lipo "$app/Contents/MacOS/Milo" -verify_arch arm64 x86_64
+          codesign --verify --deep --strict "$app"
+          mkdir -p .build/distribution/dmg-root
+          ditto "$app" .build/distribution/dmg-root/Milo.app
+          ln -s /Applications .build/distribution/dmg-root/Applications
+          hdiutil create -volname "Milo $version" -srcfolder .build/distribution/dmg-root \
+            -format UDZO ".build/distribution/Milo-$version-universal.dmg"
+          hdiutil verify ".build/distribution/Milo-$version-universal.dmg"
+          cd .build/distribution
+          shasum -a 256 "Milo-$version-universal.dmg" > "Milo-$version-universal.dmg.sha256"
+      - name: Publish release with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+            --title "Milo $GITHUB_REF_NAME" --notes-file "docs/releases/$version.md" \
+            ".build/distribution/Milo-$version-universal.dmg" \
+            ".build/distribution/Milo-$version-universal.dmg.sha256"
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
