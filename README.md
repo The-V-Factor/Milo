@@ -36,3 +36,11 @@ rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -
 自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、明暗模式和睡眠唤醒。
 
 第一版不含登录启动、进程排行、网络或磁盘监控。
+
+## 发布
+
+采用免费的 ad-hoc 签名，不进行 Developer ID 签名或 Apple 公证。安装者需自行决定是否信任应用，首次打开的操作说明见各版本 Release。
+
+更新工程的 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`，在 `docs/releases/<版本>.md` 写好发布说明，提交并推送后，在该提交上创建并推送 `v<版本>` 标签。GitHub Actions 会运行测试、构建 Intel / Apple Silicon 通用应用、生成含 Applications 快捷方式的 DMG 和 SHA-256 文件，并创建 GitHub Release。标签版本必须与应用版本一致。
+
+发布工作流使用仓库自带的 `GITHUB_TOKEN`，无需个人 Token 或 Apple 证书。附件上传完毕后才公开 Release；失败时请检查 Actions 日志，若留下草稿，可在草稿中继续处理。
