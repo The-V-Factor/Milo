@@ -2,6 +2,12 @@
 
 一个安静待在 macOS 菜单栏里的性能监控工具。SwiftUI 绘制详情，AppKit 管理菜单栏与悬停交互，无第三方依赖。
 
+<p align="center">
+  <img src="docs/images/milo-preview.png" alt="Milo 菜单栏 CPU 与内存监控面板预览" width="387">
+</p>
+
+Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看平均负载、内存分类和最近采样趋势。
+
 ## 运行
 
 1. 使用 Xcode 16 或更新版本打开 `Milo.xcodeproj`。
