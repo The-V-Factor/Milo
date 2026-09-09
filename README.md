@@ -18,6 +18,8 @@ Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看�
 
 鼠标停留约 0.25 秒展开详情；可以把鼠标移入面板继续查看。移出后自动关闭。点击菜单栏项目固定面板，再次点击或点击外部关闭；固定时也可按 Esc 关闭。面板右下角电源按钮退出 Milo。
 
+面板底部的透明度滑杆支持 0–100%，默认 92%，拖动时实时改变毛玻璃层强度；设置会自动保存。太阳 / 月亮按钮可切换日间与夜间样式：日间使用 Aqua 外观，夜间使用 Dark Aqua 外观，选择也会自动保存。毛玻璃底层使用 AppKit 的 `.popover` 材质，因此颜色不是固定黑色，会随当前样式显示为深灰或浅灰。
+
 ## 指标口径
 
 - **CPU 使用率**：`host_statistics(HOST_CPU_LOAD_INFO)` 两次采样间的 tick 差值，用户态（含 nice）与系统态之和；所有核心归一到 0–100%。启动和唤醒后的首个样本显示 `—`，等待下一次采样。
@@ -39,7 +41,7 @@ rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -
 rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -derivedDataPath .build test
 ```
 
-自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、明暗模式和睡眠唤醒。
+自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换和睡眠唤醒。
 
 第一版不含登录启动、进程排行、网络或磁盘监控。
 

@@ -20,7 +20,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         popover.behavior = .applicationDefined
         popover.animates = false
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: DashboardView(monitor: monitor))
+        let hostingController = NSHostingController(rootView: DashboardView(monitor: monitor))
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
+        popover.contentViewController = hostingController
 
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "cpu", accessibilityDescription: "Milo")
@@ -68,6 +71,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func showPopover() {
         guard !popover.isShown, let button = item.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        if let window = popover.contentViewController?.view.window {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = false
+        }
         button.highlight(true)
         outsideSince = nil
         let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in

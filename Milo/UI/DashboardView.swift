@@ -3,6 +3,8 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var monitor: SystemMonitor
+    @AppStorage("panelOpacity") private var panelOpacity = 0.92
+    @AppStorage("nightMode") private var nightMode = true
     private let mint = Color(red: 0.22, green: 0.76, blue: 0.62)
     private let blue = Color(red: 0.36, green: 0.61, blue: 0.96)
 
@@ -35,7 +37,11 @@ struct DashboardView: View {
                 }
             }
             .padding(16)
-            .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+            .background(.thinMaterial.opacity(0.58), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .strokeBorder(.white.opacity(0.11), lineWidth: 0.6)
+            }
 
             VStack(alignment: .leading, spacing: 12) {
                 metricTitle("MEMORY", subtitle: "内存", value: MetricFormat.percent(monitor.snapshot?.memory?.percentage), color: blue)
@@ -55,7 +61,11 @@ struct DashboardView: View {
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             .padding(16)
-            .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+            .background(.thinMaterial.opacity(0.58), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .strokeBorder(.white.opacity(0.11), lineWidth: 0.6)
+            }
 
             if let errors = monitor.snapshot?.errors, !errors.isEmpty {
                 Label(errors.joined(separator: " · "), systemImage: "exclamationmark.triangle")
@@ -67,6 +77,16 @@ struct DashboardView: View {
         .frame(width: 360)
         .fixedSize(horizontal: false, vertical: true)
         .monospacedDigit()
+        .background {
+            GlassBackground(opacity: panelOpacity, nightMode: nightMode)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.18 * panelOpacity), lineWidth: 0.8)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 24, y: 10)
+        .preferredColorScheme(nightMode ? .dark : .light)
     }
 
     private var header: some View {
@@ -90,18 +110,46 @@ struct DashboardView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Label(monitor.isPinned ? "已固定 · 点击外部关闭" : "悬停预览 · 点击菜单栏固定",
-                  systemImage: monitor.isPinned ? "pin.fill" : "cursorarrow")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
-            Spacer()
-            Button { NSApp.terminate(nil) } label: {
-                Image(systemName: "power").font(.system(size: 12))
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text("透明度")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Slider(value: $panelOpacity, in: 0...1.0, step: 0.01)
+                    .controlSize(.small)
+                    .tint(mint)
+                    .accessibilityLabel("面板透明度")
+                Text("\(Int(panelOpacity * 100))%")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, alignment: .trailing)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("退出 Milo")
-            .accessibilityLabel("退出 Milo")
+            HStack {
+                Label(monitor.isPinned ? "已固定 · 点击外部关闭" : "悬停预览 · 点击菜单栏固定",
+                      systemImage: monitor.isPinned ? "pin.fill" : "cursorarrow")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    nightMode.toggle()
+                } label: {
+                    Image(systemName: nightMode ? "sun.max.fill" : "moon.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(nightMode ? .orange : .indigo)
+                .help(nightMode ? "切换到日间样式" : "切换到夜间样式")
+                .accessibilityLabel(nightMode ? "切换到日间样式" : "切换到夜间样式")
+                Button { NSApp.terminate(nil) } label: {
+                    Image(systemName: "power").font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("退出 Milo")
+                .accessibilityLabel("退出 Milo")
+            }
         }
     }
 
@@ -135,6 +183,29 @@ struct DashboardView: View {
             HStack { Text(first).foregroundStyle(.secondary); Spacer(); Text(MetricFormat.bytes(firstValue)) }
             HStack { Text(second).foregroundStyle(.secondary); Spacer(); Text(MetricFormat.bytes(secondValue)) }
         }.font(.system(size: 10))
+    }
+}
+
+private struct GlassBackground: NSViewRepresentable {
+    let opacity: Double
+    let nightMode: Bool
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: nightMode ? .darkAqua : .aqua)
+        view.alphaValue = opacity
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.08
+            view.appearance = NSAppearance(named: nightMode ? .darkAqua : .aqua)
+            view.animator().alphaValue = opacity
+        }
     }
 }
 
