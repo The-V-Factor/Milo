@@ -8,6 +8,8 @@
 
 Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看平均负载、内存分类和最近采样趋势。
 
+最新版 [v0.3.0](https://github.com/The-V-Factor/Milo/releases/tag/v0.3.0) 新增 Swap 换入 / 换出速度、60 秒交换趋势和活动提示。[下载通用 DMG](https://github.com/The-V-Factor/Milo/releases/download/v0.3.0/Milo-0.3.0-universal.dmg)（macOS 14+，Apple Silicon / Intel）；安装前先退出旧版 Milo。
+
 ## 运行
 
 1. 使用 Xcode 16 或更新版本打开 `Milo.xcodeproj`。
@@ -28,9 +30,11 @@ Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看�
 - **Free**：`(free_count - speculative_count) × pageSize`。
 - **缓存**：`(external_page_count + purgeable_count) × pageSize`。speculative 同时包含在 free_count 和 external_page_count 中，从 Free 扣除后只在缓存计入一次。
 - **Swap**：`sysctlbyname("vm.swapusage")` 的已用交换空间，与物理内存单独显示。
+- **Swap 活动**：`HOST_VM_INFO64` 的 `swapins` / `swapouts` 累计页数差 × 本机页大小 ÷ 实际采样秒数，分别显示换入与换出速度（KiB/s / MiB/s）。曲线显示最近 60 秒合计速度，纵轴自动缩放，可悬停查看范围。它表示系统交换吞吐量，不是 SSD 的全部读写量，也不是已用 Swap 容量的变化率。
+- **交换提示**：收集完整 60 秒后，按时间加权的换入 + 换出均值 ≥10 MiB/s 显示“交换活跃”，≥50 MiB/s 显示“交换繁忙”，否则显示“交换较少”。这些是待实测调整的试用阈值，不是 Apple 官方标准，也不代表内存压力或异常。采样失败、计数器回退或间隔超过 5 秒时重新累计，缺失速度显示 `—`。
 - 内存来自 `host_statistics64(HOST_VM_INFO64)`，使用本机页大小，容量标注二进制单位 GiB / MiB。数据是系统计数器的近似快照，可能与活动监视器因刷新时机、统计口径不同而有小幅差异；内存使用率不代表内存压力。
 
-采样约每秒一次，保留最近 60 次内存中的趋势数据；睡眠时暂停，唤醒时重建 CPU 基线。不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。
+采样约每秒一次，CPU / 内存保留最近 60 次采样，Swap 保留最近 60 秒趋势；睡眠时暂停，唤醒时重建 CPU / Swap 基线。数据仅在内存中保留，不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。小屏幕上详情面板可滚动查看。
 
 参考：[Apple VM 统计结构](https://developer.apple.com/documentation/kernel/vm_statistics64_data_t)、[XNU 页计数说明](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/mach/vm_statistics.h)、[NSPopover](https://developer.apple.com/documentation/appkit/nspopover)。
 
@@ -41,7 +45,7 @@ rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -
 rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -derivedDataPath .build test
 ```
 
-自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换和睡眠唤醒。
+自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、Swap 双向速率与实际间隔换算、60 秒窗口加权 / 裁剪、10 / 50 MiB/s 阈值边界、采样中断 / 重置、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换、小屏滚动和睡眠唤醒。v0.3.0 的自动化构建与测试不替代 GUI、Intel 与多系统版本的实机验收。
 
 第一版不含登录启动、进程排行、网络或磁盘监控。
 

@@ -55,15 +55,76 @@ struct MemoryUsage {
     var percentage: Double { total == 0 ? 0 : min(100, Double(used) / Double(total) * 100) }
 }
 
+struct SwapCounters {
+    let incoming: UInt64
+    let outgoing: UInt64
+    let timestamp: TimeInterval
+
+    func rate(since previous: SwapCounters, pageSize: UInt64) -> SwapRate? {
+        let elapsed = timestamp - previous.timestamp
+        guard elapsed > 0, elapsed <= 5,
+              incoming >= previous.incoming, outgoing >= previous.outgoing else { return nil }
+        return SwapRate(incoming: Double(incoming - previous.incoming) * Double(pageSize) / elapsed,
+                        outgoing: Double(outgoing - previous.outgoing) * Double(pageSize) / elapsed,
+                        start: previous.timestamp, end: timestamp)
+    }
+}
+
+struct SwapRate {
+    let incoming: Double
+    let outgoing: Double
+    let start: TimeInterval
+    let end: TimeInterval
+    var total: Double { incoming + outgoing }
+}
+
+struct SwapHistory {
+    private(set) var samples: [SwapRate] = []
+
+    mutating func append(_ rate: SwapRate?) {
+        guard let rate else { samples.removeAll(); return }
+        if let last = samples.last, last.end != rate.start { samples.removeAll() }
+        samples.append(rate)
+        samples.removeAll { $0.end <= rate.end - 60 }
+    }
+
+    var duration: TimeInterval {
+        guard let first = samples.first, let last = samples.last else { return 0 }
+        return min(60, last.end - first.start)
+    }
+
+    var average: Double? {
+        guard duration >= 60, let last = samples.last else { return nil }
+        return samples.reduce(0) { sum, sample in
+            sum + sample.total * (sample.end - max(sample.start, last.end - 60))
+        } / 60
+    }
+
+    var activity: String {
+        guard let average else { return "采集中 \(Int(duration))/60s" }
+        if average >= 50 * 1_048_576 { return "交换繁忙" }
+        if average >= 10 * 1_048_576 { return "交换活跃" }
+        return "交换较少"
+    }
+}
+
 struct SystemSnapshot {
     let cpu: CPUUsage?
     let load: LoadAverage?
     let memory: MemoryUsage?
     let swapUsed: UInt64?
+    let swapRate: SwapRate?
     let errors: [String]
 }
 
 enum MetricFormat {
+    static func rate(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        if value == 0 { return "0 KiB/s" }
+        if value < 1_048_576 { return String(format: "%.1f KiB/s", value / 1024) }
+        return String(format: "%.1f MiB/s", value / 1_048_576)
+    }
+
     static func percent(_ value: Double?) -> String {
         guard let value else { return "—" }
         return String(format: "%.0f%%", value)
