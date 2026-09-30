@@ -9,6 +9,28 @@ struct DashboardView: View {
     private let blue = Color(red: 0.36, green: 0.61, blue: 0.96)
 
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            content.fixedSize(horizontal: false, vertical: true)
+            ScrollView { content }
+                .scrollIndicators(.hidden)
+        }
+        .frame(width: 360)
+        .frame(maxHeight: max(300, (NSScreen.main?.visibleFrame.height ?? 900) - 32))
+        .fixedSize(horizontal: false, vertical: true)
+        .monospacedDigit()
+        .background {
+            GlassBackground(opacity: panelOpacity, nightMode: nightMode)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.18 * panelOpacity), lineWidth: 0.8)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 24, y: 10)
+        .preferredColorScheme(nightMode ? .dark : .light)
+    }
+
+    private var content: some View {
         VStack(spacing: 16) {
             header
             VStack(alignment: .leading, spacing: 12) {
@@ -59,6 +81,8 @@ struct DashboardView: View {
                 }
                 Text("已用 = 应用 + 有线 + 压缩；缓存可被系统回收。")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                Divider()
+                swapActivity
             }
             .padding(16)
             .background(.thinMaterial.opacity(0.58), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
@@ -74,19 +98,33 @@ struct DashboardView: View {
             footer
         }
         .padding(20)
-        .frame(width: 360)
-        .fixedSize(horizontal: false, vertical: true)
-        .monospacedDigit()
-        .background {
-            GlassBackground(opacity: panelOpacity, nightMode: nightMode)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var swapActivity: some View {
+        let history = monitor.swapHistory
+        let color: Color = (history.average ?? 0) >= 10 * 1_048_576 ? .orange : .secondary
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("SWAP 活动").font(.system(size: 10, weight: .bold))
+                Spacer()
+                Text(history.activity).font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(color)
+            }
+            HStack {
+                detail("换入", MetricFormat.rate(monitor.snapshot?.swapRate?.incoming))
+                Spacer()
+                detail("换出", MetricFormat.rate(monitor.snapshot?.swapRate?.outgoing))
+            }
+            SwapSparkline(samples: history.samples, color: blue)
+                .frame(height: 28)
+            HStack {
+                Text("60s 均值 \(MetricFormat.rate(history.average))")
+                Spacer()
+                Text("换入 + 换出")
+            }
+            .font(.system(size: 10)).foregroundStyle(.secondary)
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.18 * panelOpacity), lineWidth: 0.8)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 24, y: 10)
-        .preferredColorScheme(nightMode ? .dark : .light)
+        .help("按最近 60 秒平均交换速度提示：≥10 MiB/s 活跃，≥50 MiB/s 繁忙。试用阈值，不代表内存压力或异常；启动、唤醒或采样中断后重新累计。")
     }
 
     private var header: some View {
@@ -236,5 +274,32 @@ private struct Sparkline: View {
         }
         .accessibilityLabel("最近 60 次采样趋势，纵轴 0 到 100 百分比")
         .help("最近 60 次采样 · 0–100% · 约每秒一次")
+    }
+}
+
+private struct SwapSparkline: View {
+    let samples: [SwapRate]
+    let color: Color
+
+    private var ceiling: Double { max(1_048_576, samples.map(\.total).max() ?? 0) }
+
+    var body: some View {
+        Canvas { context, size in
+            var baseline = Path()
+            baseline.move(to: CGPoint(x: 0, y: size.height - 1))
+            baseline.addLine(to: CGPoint(x: size.width, y: size.height - 1))
+            context.stroke(baseline, with: .color(.secondary.opacity(0.2)), lineWidth: 0.5)
+            guard let last = samples.last else { return }
+            var path = Path()
+            for (index, sample) in samples.enumerated() {
+                let x = size.width * max(0, sample.end - (last.end - 60)) / 60
+                let y = 1 + (size.height - 2) * (1 - sample.total / ceiling)
+                if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                else { path.addLine(to: CGPoint(x: x, y: y)) }
+            }
+            context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        }
+        .accessibilityLabel("最近 60 秒换入与换出合计速度，纵轴 0 到 \(MetricFormat.rate(ceiling))")
+        .help("最近 60 秒 · 换入 + 换出 · 纵轴自动缩放：0–\(MetricFormat.rate(ceiling))")
     }
 }

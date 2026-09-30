@@ -51,6 +51,65 @@ struct SystemMetricsTests {
         #expect(MetricFormat.bytes(nil) == "—")
         #expect(MetricFormat.bytes(1_073_741_824) == "1.00 GiB")
         #expect(MetricFormat.bytes(1_048_576) == "1 MiB")
+        #expect(MetricFormat.rate(nil) == "—")
+        #expect(MetricFormat.rate(0) == "0 KiB/s")
+        #expect(MetricFormat.rate(512) == "0.5 KiB/s")
+        #expect(MetricFormat.rate(1_048_576) == "1.0 MiB/s")
+    }
+
+    @Test(arguments: [UInt64(4096), UInt64(16384)])
+    func swapUsesElapsedTimeAndPageSize(pageSize: UInt64) throws {
+        let previous = SwapCounters(incoming: 100, outgoing: 200, timestamp: 10)
+        let current = SwapCounters(incoming: 112, outgoing: 224, timestamp: 11.5)
+        let rate = try #require(current.rate(since: previous, pageSize: pageSize))
+        #expect(rate.incoming == Double(8 * pageSize))
+        #expect(rate.outgoing == Double(16 * pageSize))
+        let idle = SwapCounters(incoming: 100, outgoing: 200, timestamp: 11)
+        #expect(try #require(idle.rate(since: previous, pageSize: pageSize)).total == 0)
+    }
+
+    @Test func swapRejectsCounterResetAndSamplingGaps() {
+        let previous = SwapCounters(incoming: 100, outgoing: 200, timestamp: 10)
+        for current in [SwapCounters(incoming: 99, outgoing: 200, timestamp: 11),
+                        SwapCounters(incoming: 100, outgoing: 199, timestamp: 11),
+                        SwapCounters(incoming: 100, outgoing: 200, timestamp: 10),
+                        SwapCounters(incoming: 100, outgoing: 200, timestamp: 9),
+                        SwapCounters(incoming: 100, outgoing: 200, timestamp: 16)] {
+            #expect(current.rate(since: previous, pageSize: 4096) == nil)
+        }
+    }
+
+    @Test func swapAverageWeightsTimeAndClipsWindow() throws {
+        var history = SwapHistory()
+        history.append(SwapRate(incoming: 0, outgoing: 60, start: 0, end: 2))
+        #expect(history.average == nil)
+        for second in 2..<60 {
+            history.append(SwapRate(incoming: 0, outgoing: 0, start: Double(second), end: Double(second + 1)))
+        }
+        #expect(try #require(history.average) == 2)
+        history.append(SwapRate(incoming: 0, outgoing: 0, start: 60, end: 61))
+        #expect(try #require(history.average) == 1)
+        history.append(SwapRate(incoming: 0, outgoing: 0, start: 61, end: 62))
+        #expect(try #require(history.average) == 0)
+        #expect(history.samples.count == 60)
+        history.append(nil)
+        #expect(history.samples.isEmpty)
+        #expect(history.average == nil)
+    }
+
+    @Test func swapActivityRequiresFullWindowAndUsesCombinedRate() {
+        for (mib, label) in [(9.9, "交换较少"), (10.0, "交换活跃"), (49.9, "交换活跃"), (50.0, "交换繁忙")] {
+            var history = SwapHistory()
+            for second in 0..<60 {
+                history.append(SwapRate(incoming: mib * 524_288, outgoing: mib * 524_288,
+                                        start: Double(second), end: Double(second + 1)))
+                if second < 59 { #expect(history.average == nil) }
+            }
+            #expect(history.activity == label)
+            history.append(SwapRate(incoming: 0, outgoing: 0, start: 65, end: 66))
+            #expect(history.average == nil)
+            #expect(history.duration == 1)
+        }
     }
 
     @Test func liveSamplingAndReset() async throws {
@@ -61,13 +120,19 @@ struct SystemMetricsTests {
         #expect(try #require(first.memory).total == ProcessInfo.processInfo.physicalMemory)
         #expect(try #require(first.load).one >= 0)
         #expect(first.swapUsed != nil)
+        #expect(first.swapRate == nil)
         try await Task.sleep(for: .seconds(1))
         let second = sampler.sample()
         #expect(second.errors.isEmpty)
         let cpu = try #require(second.cpu)
         #expect((0...100).contains(cpu.total))
+        let swapRate = try #require(second.swapRate)
+        #expect(swapRate.incoming >= 0)
+        #expect(swapRate.outgoing >= 0)
         sampler.reset()
-        #expect(sampler.sample().cpu == nil)
+        let reset = sampler.sample()
+        #expect(reset.cpu == nil)
+        #expect(reset.swapRate == nil)
         print("Live sample: CPU \(MetricFormat.percent(cpu.total)), memory \(MetricFormat.bytes(second.memory?.used)) / \(MetricFormat.bytes(second.memory?.total)), load \(second.load?.one ?? -1)")
     }
 }

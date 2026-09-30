@@ -6,6 +6,7 @@ final class SystemMonitor: ObservableObject {
     @Published private(set) var snapshot: SystemSnapshot?
     @Published private(set) var cpuHistory: [Double?] = []
     @Published private(set) var memoryHistory: [Double?] = []
+    @Published private(set) var swapHistory = SwapHistory()
     @Published var isPinned = false
 
     private let sampler = SystemSampler()
@@ -26,6 +27,7 @@ final class SystemMonitor: ObservableObject {
                 self.sampler.reset()
                 self.cpuHistory.removeAll()
                 self.memoryHistory.removeAll()
+                self.swapHistory = SwapHistory()
                 self.sample()
                 self.startTimer()
             }
@@ -57,6 +59,7 @@ final class SystemMonitor: ObservableObject {
         self.snapshot = snapshot
         cpuHistory.append(snapshot.cpu?.total)
         memoryHistory.append(snapshot.memory?.percentage)
+        swapHistory.append(snapshot.swapRate)
         if cpuHistory.count > 60 { cpuHistory.removeFirst(cpuHistory.count - 60) }
         if memoryHistory.count > 60 { memoryHistory.removeFirst(memoryHistory.count - 60) }
     }

@@ -3,13 +3,17 @@ import Foundation
 
 final class SystemSampler {
     private var previousTicks: CPUTicks?
+    private var previousSwap: SwapCounters?
     private let host = mach_host_self()
 
     deinit {
         mach_port_deallocate(mach_task_self_, host)
     }
 
-    func reset() { previousTicks = nil }
+    func reset() {
+        previousTicks = nil
+        previousSwap = nil
+    }
 
     func sample() -> SystemSnapshot {
         var errors: [String] = []
@@ -28,6 +32,10 @@ final class SystemSampler {
         }
 
         let memory = readMemory()
+        let swapRate = memory.flatMap { current in
+            previousSwap.flatMap { current.swap.rate(since: $0, pageSize: UInt64(getpagesize())) }
+        }
+        previousSwap = memory?.swap
         if memory == nil { errors.append("内存采样失败") }
         var swap = xsw_usage()
         var size = MemoryLayout<xsw_usage>.size
@@ -38,7 +46,8 @@ final class SystemSampler {
             swapUsed = nil
             errors.append("交换空间读取失败")
         }
-        return SystemSnapshot(cpu: usage, load: load, memory: memory, swapUsed: swapUsed, errors: errors)
+        return SystemSnapshot(cpu: usage, load: load, memory: memory?.usage, swapUsed: swapUsed,
+                              swapRate: swapRate, errors: errors)
     }
 
     private func readCPUTicks() -> CPUTicks? {
@@ -54,7 +63,7 @@ final class SystemSampler {
                         idle: info.cpu_ticks.2, nice: info.cpu_ticks.3)
     }
 
-    private func readMemory() -> MemoryUsage? {
+    private func readMemory() -> (usage: MemoryUsage, swap: SwapCounters)? {
         var info = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {
@@ -63,12 +72,14 @@ final class SystemSampler {
             }
         }
         guard result == KERN_SUCCESS else { return nil }
-        return MemoryUsage(
+        let memory = MemoryUsage(
             total: ProcessInfo.processInfo.physicalMemory, pageSize: UInt64(getpagesize()),
             internalPages: UInt64(info.internal_page_count), purgeablePages: UInt64(info.purgeable_count),
             wiredPages: UInt64(info.wire_count), compressedPages: UInt64(info.compressor_page_count),
             freePages: UInt64(info.free_count), speculativePages: UInt64(info.speculative_count),
             externalPages: UInt64(info.external_page_count)
         )
+        return (memory, SwapCounters(incoming: info.swapins, outgoing: info.swapouts,
+                                     timestamp: ProcessInfo.processInfo.systemUptime))
     }
 }
