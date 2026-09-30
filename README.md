@@ -8,7 +8,7 @@
 
 Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看平均负载、内存分类和最近采样趋势。
 
-最新版 [v0.3.0](https://github.com/The-V-Factor/Milo/releases/tag/v0.3.0) 新增 Swap 换入 / 换出速度、60 秒交换趋势和活动提示。[下载通用 DMG](https://github.com/The-V-Factor/Milo/releases/download/v0.3.0/Milo-0.3.0-universal.dmg)（macOS 14+，Apple Silicon / Intel）；安装前先退出旧版 Milo。
+最新版 [v0.4.0](https://github.com/The-V-Factor/Milo/releases/tag/v0.4.0) 新增应用 CPU / 内存 Top 5 与磁盘容量、读写速度监控。[下载通用 DMG](https://github.com/The-V-Factor/Milo/releases/download/v0.4.0/Milo-0.4.0-universal.dmg)（macOS 14+，Apple Silicon / Intel）；安装前先退出旧版 Milo。
 
 ## 运行
 
@@ -16,11 +16,13 @@ Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看�
 2. 选择 **Milo → My Mac**，按 **⌘R**。
 3. 菜单栏出现 `CPU …% · MEM …%`。没有主窗口，也不占 Dock。
 
-最低支持 macOS 14，兼容 Apple Silicon 和 Intel。工程默认使用本机 ad-hoc 签名，无需配置开发者账号；对外分发时需另行配置正式签名和公证。
+最低支持 macOS 14，兼容 Apple Silicon 和 Intel。工程默认使用本机 ad-hoc 签名，无需配置开发者账号。GitHub Release 同样使用 ad-hoc 签名，不进行 Apple 公证，安装说明见 Release。
 
 鼠标停留约 0.25 秒展开详情；可以把鼠标移入面板继续查看。移出后自动关闭。点击菜单栏项目固定面板，再次点击或点击外部关闭；固定时也可按 Esc 关闭。面板右下角电源按钮退出 Milo。
 
 面板底部的透明度滑杆支持 0–100%，默认 92%，拖动时实时改变毛玻璃层强度；设置会自动保存。太阳 / 月亮按钮可切换日间与夜间样式：日间使用 Aqua 外观，夜间使用 Dark Aqua 外观，选择也会自动保存。毛玻璃底层使用 AppKit 的 `.popover` 材质，因此颜色不是固定黑色，会随当前样式显示为深灰或浅灰。
+
+面板顶部提供“概览 / 应用 / 磁盘”切换。“应用”展示 CPU、内存各前 5 名，并合并可识别的辅助进程；“磁盘”展示启动数据卷容量和物理磁盘合计读写速度。新页面约每 3 秒在后台采样，容量约每 30 秒刷新。
 
 ## 指标口径
 
@@ -34,7 +36,17 @@ Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看�
 - **交换提示**：收集完整 60 秒后，按时间加权的换入 + 换出均值 ≥10 MiB/s 显示“交换活跃”，≥50 MiB/s 显示“交换繁忙”，否则显示“交换较少”。这些是待实测调整的试用阈值，不是 Apple 官方标准，也不代表内存压力或异常。采样失败、计数器回退或间隔超过 5 秒时重新累计，缺失速度显示 `—`。
 - 内存来自 `host_statistics64(HOST_VM_INFO64)`，使用本机页大小，容量标注二进制单位 GiB / MiB。数据是系统计数器的近似快照，可能与活动监视器因刷新时机、统计口径不同而有小幅差异；内存使用率不代表内存压力。
 
-采样约每秒一次，CPU / 内存保留最近 60 次采样，Swap 保留最近 60 秒趋势；睡眠时暂停，唤醒时重建 CPU / Swap 基线。数据仅在内存中保留，不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。小屏幕上详情面板可滚动查看。
+### 应用排行与磁盘
+
+- **应用 CPU**：读取可访问进程的累计 CPU 时间并计算区间差值，除以实际间隔及逻辑核心数，统一为整机 0–100% 口径。与活动监视器将单核心满载表示为 100% 的进程口径不同；首次采样、进程重启和唤醒后需等待基线。
+- **应用内存**：合计进程 `ri_phys_footprint`，显示容量和相对于物理内存总量的百分比。footprint 包含压缩内存等记账项，不等于单纯的常驻内存，各应用总和也不等于概览中的“已用内存”。
+- **应用归组**：按可执行文件所在的外层 `.app` 和可识别的父进程链合并。系统进程、权限不足的进程、归属不明的共享 XPC 服务可能无法计入；页面显示覆盖情况，部分可读项目带 `*`，不承诺与活动监视器完全一致。不使用管理员权限或读取进程的文件内容。
+- **磁盘容量**：读取 `/System/Volumes/Data` 的总量和当前可用空间，已用为两者之差；不额外加入可清理空间。APFS 共享容器容量，不能将该“已用”解释为 Data 卷独占文件的大小。
+- **磁盘读写**：读取 IOKit `IOBlockStorageDriver` 的累计读写字节，按物理设备去重后计算实际间隔内的差值。合计可读取的内置与外置物理磁盘，排除虚拟磁盘映像；这与启动数据卷的容量范围不同。首次采样、设备变化、计数回退和长间隔后显示 `—` 并重建基线，无活动时显示零。
+
+参考：[Apple 进程统计实现](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)、[运行中的应用](https://developer.apple.com/documentation/appkit/nsworkspace/runningapplications)、[Apple 磁盘统计实现](https://github.com/apple-oss-distributions/IOStorageFamily/blob/main/IOBlockStorageDriver.cpp)。
+
+采样约每秒一次，CPU / 内存保留最近 60 次采样，Swap 保留最近 60 秒趋势；睡眠时暂停，唤醒时重建 CPU / Swap、应用 CPU 和磁盘读写基线。数据仅在内存中保留，不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。小屏幕上详情面板可滚动查看。
 
 参考：[Apple VM 统计结构](https://developer.apple.com/documentation/kernel/vm_statistics64_data_t)、[XNU 页计数说明](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/mach/vm_statistics.h)、[NSPopover](https://developer.apple.com/documentation/appkit/nspopover)。
 
@@ -45,9 +57,11 @@ rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -
 rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -derivedDataPath .build test
 ```
 
-自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、Swap 双向速率与实际间隔换算、60 秒窗口加权 / 裁剪、10 / 50 MiB/s 阈值边界、采样中断 / 重置、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换、小屏滚动和睡眠唤醒。v0.3.0 的自动化构建与测试不替代 GUI、Intel 与多系统版本的实机验收。
+自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、Swap 双向速率与实际间隔换算、60 秒窗口加权 / 裁剪、10 / 50 MiB/s 阈值边界、采样中断 / 重置、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换、小屏滚动和睡眠唤醒。自动化构建与测试不替代 GUI、Intel 与多系统版本的实机验收。
 
-第一版不含登录启动、进程排行、网络或磁盘监控。
+新增应用 / 磁盘测试覆盖辅助进程归组、PID 复用、部分可读数据、独立 Top 5 排序、CPU 时钟单位、多磁盘差值、热插拔、计数回退及容量边界。离屏布局检查包含长应用名、满额排行榜及小屏高度上限；真实菜单栏切页、滚动和睡眠唤醒交互仍需手动检查。
+
+当前不含登录启动、网络监控、进程管理或按应用拆分的磁盘读写排行。
 
 ## 发布
 

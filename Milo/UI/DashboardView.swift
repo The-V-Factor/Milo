@@ -5,6 +5,7 @@ struct DashboardView: View {
     @ObservedObject var monitor: SystemMonitor
     @AppStorage("panelOpacity") private var panelOpacity = 0.92
     @AppStorage("nightMode") private var nightMode = true
+    @State private var page = 0
     private let mint = Color(red: 0.22, green: 0.76, blue: 0.62)
     private let blue = Color(red: 0.36, green: 0.61, blue: 0.96)
 
@@ -33,6 +34,27 @@ struct DashboardView: View {
     private var content: some View {
         VStack(spacing: 16) {
             header
+            Picker("监控页面", selection: $page) {
+                Text("概览").tag(0)
+                Text("应用").tag(1)
+                Text("磁盘").tag(2)
+            }
+            .pickerStyle(.segmented)
+            if page == 0 {
+                overview
+            } else if page == 1 {
+                ApplicationListsView(snapshot: monitor.applications)
+            } else {
+                DiskDashboardView(snapshot: monitor.disk)
+            }
+
+            footer
+        }
+        .padding(20)
+    }
+
+    private var overview: some View {
+        VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 metricTitle("CPU", subtitle: "处理器", value: MetricFormat.percent(monitor.snapshot?.cpu?.total), color: mint)
                 Sparkline(values: monitor.cpuHistory, color: mint)
@@ -95,9 +117,7 @@ struct DashboardView: View {
                 Label(errors.joined(separator: " · "), systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
-            footer
         }
-        .padding(20)
     }
 
     private var swapActivity: some View {
@@ -142,7 +162,7 @@ struct DashboardView: View {
             Spacer()
             HStack(spacing: 4) {
                 Circle().fill(monitor.snapshot?.errors.isEmpty == true ? mint : .orange).frame(width: 5, height: 5)
-                Text("每秒更新").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(page == 0 ? "每秒更新" : "每 3 秒更新").font(.system(size: 10)).foregroundStyle(.secondary)
             }
         }
     }
