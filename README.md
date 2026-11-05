@@ -1,72 +1,58 @@
 # Milo
 
-一个安静待在 macOS 菜单栏里的性能监控工具。SwiftUI 绘制详情，AppKit 管理菜单栏与悬停交互，无第三方依赖。
+你的 Mac，运行此刻。
 
-<p align="center">
-  <img src="docs/images/milo-preview.png" alt="Milo 菜单栏 CPU 与内存监控面板预览" width="387">
-</p>
+Milo 是一个常驻 macOS 菜单栏的小工具。抬眼就能看到 CPU 和内存用了多少，鼠标停上去，还能看看哪些应用最占资源、磁盘还剩多少空间。
 
-Milo 常驻菜单栏，随时显示 CPU 与内存使用率；悬停即可查看平均负载、内存分类和最近采样趋势。
+**[下载 Milo](https://github.com/The-V-Factor/Milo/releases/latest)** · [查看更新](https://github.com/The-V-Factor/Milo/releases)
 
-最新版 [v0.4.0](https://github.com/The-V-Factor/Milo/releases/tag/v0.4.0) 新增应用 CPU / 内存 Top 5 与磁盘容量、读写速度监控。[下载通用 DMG](https://github.com/The-V-Factor/Milo/releases/download/v0.4.0/Milo-0.4.0-universal.dmg)（macOS 14+，Apple Silicon / Intel）；安装前先退出旧版 Milo。
+支持 macOS 14 及以上，同时兼容 Apple Silicon 和 Intel。
 
-## 运行
+## 能看什么
 
-1. 使用 Xcode 16 或更新版本打开 `Milo.xcodeproj`。
-2. 选择 **Milo → My Mac**，按 **⌘R**。
-3. 菜单栏出现 `CPU …% · MEM …%`。没有主窗口，也不占 Dock。
+- **概览**：CPU、内存、平均负载，以及内存与磁盘交换的速度和趋势。
+- **应用**：CPU 和内存占用各前 5 名，合并可识别的辅助进程。
+- **磁盘**：总容量、已用和可用空间，以及当前读取、写入速度。
 
-最低支持 macOS 14，兼容 Apple Silicon 和 Intel。工程默认使用本机 ad-hoc 签名，无需配置开发者账号。GitHub Release 同样使用 ad-hoc 签名，不进行 Apple 公证，安装说明见 Release。
+还可以调节面板透明度，切换日间／夜间样式。
 
-鼠标停留约 0.25 秒展开详情；可以把鼠标移入面板继续查看。移出后自动关闭。点击菜单栏项目固定面板，再次点击或点击外部关闭；固定时也可按 Esc 关闭。面板右下角电源按钮退出 Milo。
+## 预览
 
-面板底部的透明度滑杆支持 0–100%，默认 92%，拖动时实时改变毛玻璃层强度；设置会自动保存。太阳 / 月亮按钮可切换日间与夜间样式：日间使用 Aqua 外观，夜间使用 Dark Aqua 外观，选择也会自动保存。毛玻璃底层使用 AppKit 的 `.popover` 材质，因此颜色不是固定黑色，会随当前样式显示为深灰或浅灰。
+<table>
+  <tr>
+    <th>概览</th>
+    <th>应用</th>
+    <th>磁盘</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/milo-preview.png" alt="Milo 概览：CPU、内存和 Swap 交换趋势" width="260"></td>
+    <td valign="top"><img src="docs/images/milo-applications.png" alt="Milo 应用：CPU 和内存占用前 5 名" width="260"></td>
+    <td valign="top"><img src="docs/images/milo-disk.png" alt="Milo 磁盘：容量和实时读写速度" width="260"></td>
+  </tr>
+</table>
 
-面板顶部提供“概览 / 应用 / 磁盘”切换。“应用”展示 CPU、内存各前 5 名，并合并可识别的辅助进程；“磁盘”展示启动数据卷容量和物理磁盘合计读写速度。新页面约每 3 秒在后台采样，容量约每 30 秒刷新。
+## 安装
 
-## 指标口径
+1. 打开 [下载页面](https://github.com/The-V-Factor/Milo/releases/latest)，在 **Assets（附件）** 中下载 `.dmg` 文件。
+2. 打开 DMG，把 **Milo** 拖进 **Applications（应用程序）**。
+3. 从“应用程序”打开 Milo，菜单栏就会出现 CPU 和内存数据。更新前请先退出旧版。
 
-- **CPU 使用率**：`host_statistics(HOST_CPU_LOAD_INFO)` 两次采样间的 tick 差值，用户态（含 nice）与系统态之和；所有核心归一到 0–100%。启动和唤醒后的首个样本显示 `—`，等待下一次采样。
-- **Load Average**：`getloadavg` 的 1、5、15 分钟系统平均负载，不是百分比，也不是瞬时使用率。显示逻辑核心数供参考。
-- **已用内存**：应用 + 有线 + 压缩。应用为 `(internal_page_count - purgeable_count) × pageSize`；压缩使用实际物理页数，不使用压缩前大小。
-- **Free**：`(free_count - speculative_count) × pageSize`。
-- **缓存**：`(external_page_count + purgeable_count) × pageSize`。speculative 同时包含在 free_count 和 external_page_count 中，从 Free 扣除后只在缓存计入一次。
-- **Swap**：`sysctlbyname("vm.swapusage")` 的已用交换空间，与物理内存单独显示。
-- **Swap 活动**：`HOST_VM_INFO64` 的 `swapins` / `swapouts` 累计页数差 × 本机页大小 ÷ 实际采样秒数，分别显示换入与换出速度（KiB/s / MiB/s）。曲线显示最近 60 秒合计速度，纵轴自动缩放，可悬停查看范围。它表示系统交换吞吐量，不是 SSD 的全部读写量，也不是已用 Swap 容量的变化率。
-- **交换提示**：收集完整 60 秒后，按时间加权的换入 + 换出均值 ≥10 MiB/s 显示“交换活跃”，≥50 MiB/s 显示“交换繁忙”，否则显示“交换较少”。这些是待实测调整的试用阈值，不是 Apple 官方标准，也不代表内存压力或异常。采样失败、计数器回退或间隔超过 5 秒时重新累计，缺失速度显示 `—`。
-- 内存来自 `host_statistics64(HOST_VM_INFO64)`，使用本机页大小，容量标注二进制单位 GiB / MiB。数据是系统计数器的近似快照，可能与活动监视器因刷新时机、统计口径不同而有小幅差异；内存使用率不代表内存压力。
+Milo 免费开源，未经过 Apple 公证。如果首次打开被 macOS 拦截，请先确认下载来源，再按照 [Apple 的说明](https://support.apple.com/zh-cn/102445) 在“系统设置 → 隐私与安全性”中选择“仍要打开”。
 
-### 应用排行与磁盘
+## 怎么用
 
-- **应用 CPU**：读取可访问进程的累计 CPU 时间并计算区间差值，除以实际间隔及逻辑核心数，统一为整机 0–100% 口径。与活动监视器将单核心满载表示为 100% 的进程口径不同；首次采样、进程重启和唤醒后需等待基线。
-- **应用内存**：合计进程 `ri_phys_footprint`，显示容量和相对于物理内存总量的百分比。footprint 包含压缩内存等记账项，不等于单纯的常驻内存，各应用总和也不等于概览中的“已用内存”。
-- **应用归组**：按可执行文件所在的外层 `.app` 和可识别的父进程链合并。系统进程、权限不足的进程、归属不明的共享 XPC 服务可能无法计入；页面显示覆盖情况，部分可读项目带 `*`，不承诺与活动监视器完全一致。不使用管理员权限或读取进程的文件内容。
-- **磁盘容量**：读取 `/System/Volumes/Data` 的总量和当前可用空间，已用为两者之差；不额外加入可清理空间。APFS 共享容器容量，不能将该“已用”解释为 Data 卷独占文件的大小。
-- **磁盘读写**：读取 IOKit `IOBlockStorageDriver` 的累计读写字节，按物理设备去重后计算实际间隔内的差值。合计可读取的内置与外置物理磁盘，排除虚拟磁盘映像；这与启动数据卷的容量范围不同。首次采样、设备变化、计数回退和长间隔后显示 `—` 并重建基线，无活动时显示零。
+- **看详情**：鼠标停在菜单栏数据上，展开面板；移开后自动收起。
+- **固定面板**：点击菜单栏数据。点击外部或按 Esc 关闭。
+- **切换内容**：点击顶部的“概览”“应用”或“磁盘”。
+- **调整外观**：拖动底部透明度滑杆，点击太阳／月亮切换样式；设置会自动保存。
+- **退出**：点击面板右下角的电源按钮。
 
-参考：[Apple 进程统计实现](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)、[运行中的应用](https://developer.apple.com/documentation/appkit/nsworkspace/runningapplications)、[Apple 磁盘统计实现](https://github.com/apple-oss-distributions/IOStorageFamily/blob/main/IOBlockStorageDriver.cpp)。
+刚打开时，部分速度和趋势需要等几秒才会出现；Swap 活动提示需要累计约一分钟。磁盘容量不包含潜在可清理空间，应用排行榜也可能无法计入部分系统共享服务。
 
-采样约每秒一次，CPU / 内存保留最近 60 次采样，Swap 保留最近 60 秒趋势；睡眠时暂停，唤醒时重建 CPU / Swap、应用 CPU 和磁盘读写基线。数据仅在内存中保留，不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。小屏幕上详情面板可滚动查看。
+Milo 不上传监控数据，历史趋势只保留在内存中，无需辅助功能或录屏权限。
 
-参考：[Apple VM 统计结构](https://developer.apple.com/documentation/kernel/vm_statistics64_data_t)、[XNU 页计数说明](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/mach/vm_statistics.h)、[NSPopover](https://developer.apple.com/documentation/appkit/nspopover)。
+## 想了解更多
 
-## 验证
-
-```sh
-rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -derivedDataPath .build build
-rtk proxy xcodebuild -project Milo.xcodeproj -scheme Milo -configuration Debug -derivedDataPath .build test
-```
-
-自动化测试覆盖 CPU 差值、计数器回绕、4K / 16K 内存页、缓存去重、Swap 双向速率与实际间隔换算、60 秒窗口加权 / 裁剪、10 / 50 MiB/s 阈值边界、采样中断 / 重置、不可用状态，以及真实本机采样。图形界面还应检查悬停、点击固定、外部点击 / Esc 关闭、透明度拖动、日间 / 夜间切换、小屏滚动和睡眠唤醒。自动化构建与测试不替代 GUI、Intel 与多系统版本的实机验收。
-
-新增应用 / 磁盘测试覆盖辅助进程归组、PID 复用、部分可读数据、独立 Top 5 排序、CPU 时钟单位、多磁盘差值、热插拔、计数回退及容量边界。离屏布局检查包含长应用名、满额排行榜及小屏高度上限；真实菜单栏切页、滚动和睡眠唤醒交互仍需手动检查。
-
-当前不含登录启动、网络监控、进程管理或按应用拆分的磁盘读写排行。
-
-## 发布
-
-采用免费的 ad-hoc 签名，不进行 Developer ID 签名或 Apple 公证。安装者需自行决定是否信任应用，首次打开的操作说明见各版本 Release。
-
-更新工程的 `MARKETING_VERSION` 和 `CURRENT_PROJECT_VERSION`，在 `docs/releases/<版本>.md` 写好发布说明，提交并推送后，在该提交上创建并推送 `v<版本>` 标签。GitHub Actions 会运行测试、构建 Intel / Apple Silicon 通用应用、生成含 Applications 快捷方式的 DMG 和 SHA-256 文件，并创建 GitHub Release。标签版本必须与应用版本一致。
-
-发布工作流使用仓库自带的 `GITHUB_TOKEN`，无需个人 Token 或 Apple 证书。附件上传完毕后才公开 Release；失败时请检查 Actions 日志，若留下草稿，可在草稿中继续处理。
+- [指标说明](docs/metrics.md)：各项数据代表什么、为什么可能与“活动监视器”不同。
+- [开发与发布](docs/development.md)：从源码运行、测试和打包。
+- [反馈问题或建议](https://github.com/The-V-Factor/Milo/issues)。
