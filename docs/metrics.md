@@ -25,4 +25,3 @@
 采样约每秒一次，CPU / 内存保留最近 60 次采样，Swap 保留最近 60 秒趋势；睡眠时暂停，唤醒时重建 CPU / Swap、应用 CPU 和磁盘读写基线。数据仅在内存中保留，不启动 shell 子进程，不保存历史，不访问网络，不需要辅助功能或录屏权限。悬停检测仅在面板打开期间使用额外定时器。小屏幕上详情面板可滚动查看。
 
 参考：[Apple VM 统计结构](https://developer.apple.com/documentation/kernel/vm_statistics64_data_t)、[XNU 页计数说明](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/mach/vm_statistics.h)、[NSPopover](https://developer.apple.com/documentation/appkit/nspopover)。
-
